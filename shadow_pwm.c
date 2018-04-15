@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
+#include <pigpio.h>
 
 #include "aws_iot_config.h"
 #include "aws_iot_log.h"
@@ -97,7 +99,8 @@ void windowActuate_Callback(const char *pJsonString, uint32_t JsonStringDataLen,
 	IOT_UNUSED(JsonStringDataLen);
 
 	if(pContext != NULL) {
-		IOT_INFO("Delta - Window state changed to %d", *(bool *) (pContext->pData));
+		IOT_INFO("Delta - PWM state changed to %d", *(int *) (pContext->pData));
+		gpioPWM(2, *(int *) (pContext->pData));
 	}
 }
 
@@ -140,6 +143,9 @@ void parseInputArgsForConnectParams(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+
+	gpioInitialise();
+	
 	IoT_Error_t rc = FAILURE;
 	int32_t i = 0;
 
@@ -148,11 +154,11 @@ int main(int argc, char **argv) {
 	char *pJsonStringToUpdate;
 	float temperature = 0.0;
 
-	int windowOpen = 0;
+	int pwmValue = 0;
 	jsonStruct_t windowActuator;
 	windowActuator.cb = windowActuate_Callback;
-	windowActuator.pData = &windowOpen;
-	windowActuator.pKey = "windowOpen";
+	windowActuator.pData = &pwmValue;
+	windowActuator.pKey = "pwm";
 	windowActuator.type = SHADOW_JSON_INT32;
 
 	jsonStruct_t temperatureHandler;
@@ -237,7 +243,7 @@ int main(int argc, char **argv) {
 			continue;
 		}
 		IOT_INFO("\n=======================================================================================\n");
-		IOT_INFO("On Device: window state %s", windowOpen ? "true" : "false");
+//		IOT_INFO("On Device: window state %s", windowOpen ? "true" : "false");
 		simulateRoomTemperature(&temperature);
 
 		rc = aws_iot_shadow_init_json_document(JsonDocumentBuffer, sizeOfJsonDocumentBuffer);
