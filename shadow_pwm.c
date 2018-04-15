@@ -66,16 +66,18 @@ static char HostAddress[255] = AWS_IOT_MQTT_HOST;
 static uint32_t port = AWS_IOT_MQTT_PORT;
 static uint8_t numPubs = 5;
 
-static void simulateRoomTemperature(float *pRoomTemperature) {
-	static float deltaChange;
+static void getMoistureLevel(int *moisture) {
 
-	if(*pRoomTemperature >= ROOMTEMPERATURE_UPPERLIMIT) {
-		deltaChange = -0.5f;
-	} else if(*pRoomTemperature <= ROOMTEMPERATURE_LOWERLIMIT) {
-		deltaChange = 0.5f;
+	gpioSetMode(14, PI_INPUT);
+
+	if (gpioRead(14) == 0)
+	{
+		*moisture = 1;
 	}
-
-	*pRoomTemperature += deltaChange;
+	if (gpioRead(14) == 1)
+	{
+		*moisture = 0;
+	}
 }
 
 void ShadowUpdateStatusCallback(const char *pThingName, ShadowActions_t action, Shadow_Ack_Status_t status,
@@ -152,7 +154,7 @@ int main(int argc, char **argv) {
 	char JsonDocumentBuffer[MAX_LENGTH_OF_UPDATE_JSON_BUFFER];
 	size_t sizeOfJsonDocumentBuffer = sizeof(JsonDocumentBuffer) / sizeof(JsonDocumentBuffer[0]);
 	char *pJsonStringToUpdate;
-	float temperature = 0.0;
+	int moisture = 0;
 
 	int pwmValue = 0;
 	jsonStruct_t windowActuator;
@@ -161,11 +163,11 @@ int main(int argc, char **argv) {
 	windowActuator.pKey = "pwm";
 	windowActuator.type = SHADOW_JSON_INT32;
 
-	jsonStruct_t temperatureHandler;
-	temperatureHandler.cb = NULL;
-	temperatureHandler.pKey = "temperature";
-	temperatureHandler.pData = &temperature;
-	temperatureHandler.type = SHADOW_JSON_FLOAT;
+	jsonStruct_t moistureHandler;
+	moistureHandler.cb = NULL;
+	moistureHandler.pKey = "moisture level";
+	moistureHandler.pData = &moisture;
+	moistureHandler.type = SHADOW_JSON_INT32;
 
 	char rootCA[PATH_MAX + 1];
 	char clientCRT[PATH_MAX + 1];
@@ -232,7 +234,7 @@ int main(int argc, char **argv) {
 	if(SUCCESS != rc) {
 		IOT_ERROR("Shadow Register Delta Error");
 	}
-	temperature = STARTING_ROOMTEMPERATURE;
+//	temperature = STARTING_ROOMTEMPERATURE;
 
 	// loop and publish a change in temperature
 	while(NETWORK_ATTEMPTING_RECONNECT == rc || NETWORK_RECONNECTED == rc || SUCCESS == rc) {
@@ -244,11 +246,12 @@ int main(int argc, char **argv) {
 		}
 		IOT_INFO("\n=======================================================================================\n");
 //		IOT_INFO("On Device: window state %s", windowOpen ? "true" : "false");
-		simulateRoomTemperature(&temperature);
+//		simulateRoomTemperature(&temperature);
+		getMoistureLevel(&moisture);
 
 		rc = aws_iot_shadow_init_json_document(JsonDocumentBuffer, sizeOfJsonDocumentBuffer);
 		if(SUCCESS == rc) {
-			rc = aws_iot_shadow_add_reported(JsonDocumentBuffer, sizeOfJsonDocumentBuffer, 2, &temperatureHandler,
+			rc = aws_iot_shadow_add_reported(JsonDocumentBuffer, sizeOfJsonDocumentBuffer, 2, &moistureHandler,
 											 &windowActuator);
 			if(SUCCESS == rc) {
 				rc = aws_iot_finalize_json_document(JsonDocumentBuffer, sizeOfJsonDocumentBuffer);
